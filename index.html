@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多转盘抽奖系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f0f2f5;
+            color: #333;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 300px 1fr 300px;
+            gap: 20px;
+        }
+        .panel {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #1a1a1a;
+            border-bottom: 2px solid #e8e8e8;
+            padding-bottom: 8px;
+        }
+        h3 {
+            font-size: 15px;
+            margin: 12px 0 8px;
+            color: #555;
+        }
+
+        /* 左侧：转盘列表 */
+        .turntable-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .turntable-item {
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+        }
+        .turntable-item:hover { background: #f5f5f5; }
+        .turntable-item.active {
+            background: #e6f4ff;
+            color: #1677ff;
+            font-weight: 500;
+        }
+        .delete-btn {
+            color: #ff4d4f;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .turntable-item:hover .delete-btn { opacity: 1; }
+        .create-btn {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            background: #1677ff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .create-btn:hover { background: #4096ff; }
+
+        /* 中间：转盘区域 */
+        .turntable-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .turntable-name {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            padding: 6px 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 6px;
+            text-align: center;
+            width: 80%;
+        }
+        .wheel-wrapper {
+            position: relative;
+            width: 400px;
+            height: 400px;
+        }
+        #wheelCanvas {
+            width: 100%;
+            height: 100%;
+            transition: transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+        }
+        .pointer {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 30px solid #ff4d4f;
+            z-index: 10;
+        }
+        .spin-btn {
+            margin-top: 30px;
+            padding: 14px 50px;
+            font-size: 18px;
+            background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(238, 90, 111, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .spin-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(238, 90, 111, 0.5);
+        }
+        .spin-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .result-display {
+            margin-top: 20px;
+            font-size: 24px;
+            font-weight: 600;
+            color: #ff4d4f;
+            height: 36px;
+        }
+
+        /* 右侧：选项编辑 + 日志 */
+        .option-item {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+        .option-item input[type="text"] {
+            flex: 1;
+            padding: 6px 8px;
+            border: 1px solid #d9d9d9;
+            border-radius: 6px;
+        }
+        .option-item input[type="number"] {
+            width: 60px;
+            padding: 6px 8px;
+            border: 1px solid #d9d9d9;
+            border-radius: 6px;
+        }
+        .option-item .remove-option {
+            color: #ff4d4f;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        .add-option-btn {
+            width: 100%;
+            padding: 8px;
+            margin-top: 8px;
+            background: #52c41a;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .add-option-btn:hover { background: #73d13d; }
+
+        .log-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .log-item {
+            padding: 8px 10px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .log-item .log-result {
+            font-weight: 500;
+            color: #1677ff;
+        }
+        .log-item .log-time {
+            color: #999;
+            font-size: 12px;
+        }
+        .clear-log-btn {
+            width: 100%;
+            padding: 6px;
+            margin-top: 10px;
+            background: #fff;
+            color: #ff4d4f;
+            border: 1px solid #ff4d4f;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        @media (max-width: 1000px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 左侧：转盘列表 -->
+        <div class="panel">
+            <h2>转盘列表</h2>
+            <div class="turntable-list" id="turntableList"></div>
+            <button class="create-btn" onclick="createTurntable()">+ 新建转盘</button>
+        </div>
+
+        <!-- 中间：转盘区域 -->
+        <div class="panel turntable-container">
+            <input type="text" class="turntable-name" id="turntableName" placeholder="转盘名称" onchange="updateName()">
+            <div class="wheel-wrapper">
+                <div class="pointer"></div>
+                <canvas id="wheelCanvas" width="400" height="400"></canvas>
+            </div>
+            <button class="spin-btn" id="spinBtn" onclick="spin()">开始抽奖</button>
+            <div class="result-display" id="resultDisplay"></div>
+        </div>
+
+        <!-- 右侧：选项和日志 -->
+        <div class="panel">
+            <h2>选项设置（权重）</h2>
+            <div id="optionsList"></div>
+            <button class="add-option-btn" onclick="addOption()">+ 添加选项</button>
+
+            <h2 style="margin-top: 25px;">转动日志</h2>
+            <div class="log-list" id="logList"></div>
+            <button class="clear-log-btn" onclick="clearLog()">清空当前日志</button>
+        </div>
+    </div>
+
+    <script>
+        // 数据结构
+        let turntables = [];
+        let currentId = null;
+        let isSpinning = false;
+        let currentRotation = 0;
+
+        const colors = [
+            '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
+            '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
+            '#BB8FCE', '#85C1E9', '#F8B500', '#00B894'
+        ];
+
+        // 初始化
+        function init() {
+            loadData();
+            if (turntables.length === 0) {
+                createTurntable();
+            } else {
+                selectTurntable(turntables[0].id);
+            }
+            renderList();
+        }
+
+        // 加载本地数据
+        function loadData() {
+            const saved = localStorage.getItem('turntables');
+            if (saved) {
+                turntables = JSON.parse(saved);
+            }
+        }
+
+        // 保存数据
+        function saveData() {
+            localStorage.setItem('turntables', JSON.stringify(turntables));
+        }
+
+        // 创建新转盘
+        function createTurntable() {
+            const id = Date.now().toString();
+            const newTurntable = {
+                id: id,
+                name: '新转盘 ' + (turntables.length + 1),
+                options: [
+                    { text: '选项1', weight: 1 },
+                    { text: '选项2', weight: 1 },
+                    { text: '选项3', weight: 1 },
+                    { text: '选项4', weight: 1 }
+                ],
+                logs: []
+            };
+            turntables.push(newTurntable);
+            saveData();
+            renderList();
+            selectTurntable(id);
+        }
+
+        // 删除转盘
+        function deleteTurntable(id, e) {
+            e.stopPropagation();
+            if (turntables.length <= 1) {
+                alert('至少保留一个转盘');
+                return;
+            }
+            if (!confirm('确定删除这个转盘吗？')) return;
+            
+            turntables = turntables.filter(t => t.id !== id);
+            if (currentId === id) {
+                selectTurntable(turntables[0].id);
+            }
+            saveData();
+            renderList();
+        }
+
+        // 选择转盘
+        function selectTurntable(id) {
+            currentId = id;
+            const t = getCurrent();
+            document.getElementById('turntableName').value = t.name;
+            renderList();
+            renderOptions();
+            drawWheel();
+            renderLogs();
+        }
+
+        // 获取当前转盘
+        function getCurrent() {
+            return turntables.find(t => t.id === currentId);
+        }
+
+        // 更新名称
+        function updateName() {
+            const t = getCurrent();
+            t.name = document.getElementById('turntableName').value || '未命名转盘';
+            saveData();
+            renderList();
+        }
+
+        // 渲染转盘列表
+        function renderList() {
+            const container = document.getElementById('turntableList');
+            container.innerHTML = '';
+            turntables.forEach(t => {
+                const div = document.createElement('div');
+                div.className = 'turntable-item' + (t.id === currentId ? ' active' : '');
+                div.innerHTML = `
+                    <span>${t.name}</span>
+                    <button class="delete-btn" onclick="deleteTurntable('${t.id}', event)">删除</button>
+                `;
+                div.onclick = () => selectTurntable(t.id);
+                container.appendChild(div);
+            });
+        }
+
+        // 渲染选项列表
+        function renderOptions() {
+            const container = document.getElementById('optionsList');
+            const options = getCurrent().options;
+            container.innerHTML = '';
+            
+            options.forEach((opt, index) => {
+                const div = document.createElement('div');
+                div.className = 'option-item';
+                div.innerHTML = `
+                    <input type="text" value="${opt.text}" onchange="updateOption(${index}, 'text', this.value)">
+                    <input type="number" min="0.1" step="0.1" value="${opt.weight}" 
+                           onchange="updateOption(${index}, 'weight', parseFloat(this.value))">
+                    <button class="remove-option" onclick="removeOption(${index})">×</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // 添加选项
+        function addOption() {
+            const t = getCurrent();
+            if (t.options.length >= 12) {
+                alert('最多支持12个选项');
+                return;
+            }
+            t.options.push({ text: '新选项', weight: 1 });
+            saveData();
+            renderOptions();
+            drawWheel();
+        }
+
+        // 更新选项
+        function updateOption(index, key, value) {
+            const t = getCurrent();
+            t.options[index][key] = value;
+            saveData();
+            drawWheel();
+        }
+
+        // 删除选项
+        function removeOption(index) {
+            const t = getCurrent();
+            if (t.options.length <= 2) {
+                alert('至少保留2个选项');
+                return;
+            }
+            t.options.splice(index, 1);
+            saveData();
+            renderOptions();
+            drawWheel();
+        }
+
+        // 绘制转盘
+        function drawWheel() {
+            const canvas = document.getElementById('wheelCanvas');
+            const ctx = canvas.getContext('2d');
+            const options = getCurrent().options;
+            const totalWeight = options.reduce((sum, o) => sum + o.weight, 0);
+            
+            const centerX = 200;
+            const centerY = 200;
+            const radius = 190;
+            
+            ctx.clearRect(0, 0, 400, 400);
+            
+            let startAngle = -Math.PI / 2;
+            
+            options.forEach((opt, i) => {
+                const sliceAngle = (opt.weight / totalWeight) * 2 * Math.PI;
+                const endAngle = startAngle + sliceAngle;
+                
+                // 绘制扇形
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                ctx.closePath();
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // 绘制文字
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(startAngle + sliceAngle / 2);
+                ctx.textAlign = 'right';
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 16px sans-serif';
+                ctx.shadowColor = 'rgba(0,0,0,0.3)';
+                ctx.shadowBlur = 2;
+                ctx.fillText(opt.text, radius - 20, 5);
+                ctx.restore();
+                
+                startAngle = endAngle;
+            });
+            
+            // 中心圆
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 30, 0, 2 * Math.PI);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            ctx.strokeStyle = '#e8e8e8';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        // 转动转盘
+        function spin() {
+            if (isSpinning) return;
+            const t = getCurrent();
+            if (t.options.length < 2) {
+                alert('至少需要2个选项');
+                return;
+            }
+            
+            isSpinning = true;
+            document.getElementById('spinBtn').disabled = true;
+            document.getElementById('resultDisplay').textContent = '';
+            
+            const totalWeight = t.options.reduce((sum, o) => sum + o.weight, 0);
+            const random = Math.random() * totalWeight;
+            
+            let cumulative = 0;
+            let selectedIndex = 0;
+            for (let i = 0; i < t.options.length; i++) {
+                cumulative += t.options[i].weight;
+                if (random <= cumulative) {
+                    selectedIndex = i;
+                    break;
+                }
+            }
+            
+            // 计算旋转角度
+            let angleBefore = 0;
+            for (let i = 0; i < selectedIndex; i++) {
+                angleBefore += (t.options[i].weight / totalWeight) * 360;
+            }
+            const selectedAngle = angleBefore + (t.options[selectedIndex].weight / totalWeight) * 360 / 2;
+            
+            const spins = 5 + Math.floor(Math.random() * 3);
+            const targetRotation = currentRotation + spins * 360 + (360 - selectedAngle);
+            currentRotation = targetRotation;
+            
+            const canvas = document.getElementById('wheelCanvas');
+            canvas.style.transform = `rotate(${targetRotation}deg)`;
+            
+            setTimeout(() => {
+                const result = t.options[selectedIndex].text;
+                document.getElementById('resultDisplay').textContent = '🎉 结果：' + result;
+                
+                // 记录日志
+                t.logs.unshift({
+                    result: result,
+                    time: new Date().toLocaleString('zh-CN')
+                });
+                if (t.logs.length > 50) t.logs.pop();
+                saveData();
+                renderLogs();
+                
+                isSpinning = false;
+                document.getElementById('spinBtn').disabled = false;
+            }, 4000);
+        }
+
+        // 渲染日志
+        function renderLogs() {
+            const container = document.getElementById('logList');
+            const logs = getCurrent().logs;
+            container.innerHTML = '';
+            
+            if (logs.length === 0) {
+                container.innerHTML = '<div style="color:#999;text-align:center;padding:20px;">暂无记录</div>';
+                return;
+            }
+            
+            logs.forEach(log => {
+                const div = document.createElement('div');
+                div.className = 'log-item';
+                div.innerHTML = `
+                    <span class="log-result">${log.result}</span>
+                    <span class="log-time">${log.time}</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // 清空日志
+        function clearLog() {
+            if (!confirm('确定清空当前转盘的日志吗？')) return;
+            getCurrent().logs = [];
+            saveData();
+            renderLogs();
+        }
+
+        // 启动
+        init();
+    </script>
+</body>
+</html>
